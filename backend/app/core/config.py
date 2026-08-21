@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # Local dev falls back to SQLite; Docker Compose supplies a PostgreSQL URL.
     DATABASE_URL: str = "sqlite+pysqlite:///./uploadsaathi.db"
 
+    # Auth. JWT_SECRET must be overridden via env in any deployed environment.
+    JWT_SECRET: str = "dev-only-insecure-secret-change-me"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 12
+
     # Comma-separated list of allowed browser origins.
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 

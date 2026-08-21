@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { fetchHealth } from '../../lib/health'
 
 export function LandingPage() {
@@ -24,6 +25,21 @@ export function LandingPage() {
         Most people can take a photo of a document. Far fewer can make it satisfy a portal&apos;s
         file size, format and dimension rules. UploadSaathi does that part automatically.
       </p>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Link
+          to="/signup"
+          className="rounded-lg bg-saathi-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-saathi-700"
+        >
+          Get started
+        </Link>
+        <Link
+          to="/login"
+          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold hover:bg-white"
+        >
+          I already have an account
+        </Link>
+      </div>
 
       <div className="mt-8 rounded-xl border border-saathi-100 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-ink-900">System status</h2>
