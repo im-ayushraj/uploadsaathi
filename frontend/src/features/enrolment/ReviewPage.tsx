@@ -2,7 +2,12 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepShell, primaryButtonClass, secondaryButtonClass } from './StepShell'
-import { fetchEnrolment, fetchPortal, prepareEnrolment } from '../../lib/enrolment'
+import {
+  fetchDocumentTypes,
+  fetchEnrolment,
+  fetchPortal,
+  prepareEnrolment,
+} from '../../lib/enrolment'
 import { toErrorMessage } from '../../lib/auth'
 
 function Row({ label, value }: { label: string; value?: string | null }) {
@@ -26,6 +31,11 @@ export function ReviewPage() {
     queryFn: () => fetchEnrolment(enrolmentId),
   })
   const { data: portal } = useQuery({ queryKey: ['portal'], queryFn: () => fetchPortal() })
+  const { data: docTypes } = useQuery({
+    queryKey: ['portal-documents', enrolment?.applicant_type],
+    queryFn: () => fetchDocumentTypes(enrolment!.applicant_type),
+    enabled: Boolean(enrolment?.applicant_type),
+  })
 
   const prepare = useMutation({
     mutationFn: () => prepareEnrolment(enrolmentId),
@@ -50,6 +60,11 @@ export function ReviewPage() {
   const applicantLabel =
     portal?.applicant_types.find((t) => t.id === enrolment?.applicant_type)?.label ??
     enrolment?.applicant_type
+
+  const progress = enrolment?.progress
+  const accepted = new Set(progress?.documents_accepted ?? [])
+  const labelFor = (slot: string) => docTypes?.find((d) => d.id === slot)?.label ?? slot
+  const canPrepare = progress?.can_prepare ?? false
 
   return (
     <StepShell
@@ -101,6 +116,36 @@ export function ReviewPage() {
         </Link>
       </section>
 
+      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Documents</h2>
+        <ul className="mt-2 space-y-1">
+          {(progress?.documents_required ?? []).map((slot) => {
+            const done = accepted.has(slot)
+            return (
+              <li key={slot} className="flex items-center gap-2 text-sm">
+                <span
+                  aria-hidden
+                  className={[
+                    'grid h-5 w-5 place-items-center rounded-full text-[11px] font-semibold',
+                    done ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600',
+                  ].join(' ')}
+                >
+                  {done ? '✓' : '·'}
+                </span>
+                <span className={done ? 'text-slate-900' : 'text-slate-600'}>{labelFor(slot)}</span>
+                {!done && <span className="text-xs text-amber-700">not ready yet</span>}
+              </li>
+            )
+          })}
+        </ul>
+        <Link
+          to={`/enrolment/${enrolmentId}/documents`}
+          className="mt-2 inline-block text-sm font-medium text-saathi-600 hover:underline"
+        >
+          {progress?.documents ? 'Review documents' : 'Finish the documents'}
+        </Link>
+      </section>
+
       <p className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
         Preparing an application only creates your local document pack. Nothing is sent to UIDAI or
         any government system.
@@ -116,7 +161,7 @@ export function ReviewPage() {
         <button
           type="button"
           className={primaryButtonClass}
-          disabled={prepare.isPending}
+          disabled={prepare.isPending || !canPrepare}
           onClick={() => prepare.mutate()}
         >
           {prepare.isPending ? 'Preparing…' : 'Prepare my application'}
@@ -128,6 +173,11 @@ export function ReviewPage() {
         >
           Back
         </button>
+        {!canPrepare && (
+          <span className="text-sm text-slate-600">
+            Complete every step above to prepare your document pack.
+          </span>
+        )}
       </div>
     </StepShell>
   )

@@ -1,11 +1,11 @@
 # UploadSaathi Project State
 
 Current Phase:
-Phase 5 — in progress (upload API done, wizard UI next)
+Phase 5 — complete (upload API + wizard document UI)
 
 Current Task:
-Phase 5b: document upload UI in the wizard (select file → detected issue → optimising → before/after
-→ accept), driven by the /enrolments/{id}/documents endpoints
+Phase 6: AI-assisted analysis behind a replaceable interface (document-type hints and readability
+advice only — never byte-size, resize, format conversion or requirement validation)
 
 Completed:
 - Phase 0: inspected repo (was empty), captured environment facts
@@ -55,10 +55,26 @@ Completed:
   prepare() refuses until every required document is accepted
 - Phase 5a: 12 document API tests (hero upload, accept→can_prepare, replace, download, corrupt
   file, multi-page PDF for photograph, accept blocked, delete, ownership, prepared lock)
+- Phase 5a: EnrolmentDocument.ready / DocumentOut.ready expose the engine's verdict separately
+  from `accepted` (the citizen's), so the list endpoint alone tells the UI what to offer
+- Phase 5b: frontend lib/documents.ts — zod mirrors of the upload contract, upload/accept/delete
+  clients, and fetchDocumentObjectUrl (auth-protected file fetched as a blob URL)
+- Phase 5b: DocumentSlot component — choose file → "preparing…" → before/after (struck-through
+  original → optimised size, % smaller, Readable ✓, format/dimensions/pages) → what we changed →
+  warnings → preview → "Use this file" / "Choose a different file" / "Remove"
+- Phase 5b: engine step + warning codes translated to citizen language in the UI, with regex
+  handling for the dynamic dpi_below_recommended_N / pages_rasterised_at_Ndpi codes
+- Phase 5b: RequirementSummary extracted to its own module so DocumentSlot can reuse it
+- Phase 5b: DocumentRequirementsPage rewritten — one slot per config document, "N of M documents
+  ready", privacy note, Continue gated on every slot being accepted
+- Phase 5b: ReviewPage shows a per-slot documents checklist and disables "Prepare my application"
+  until progress.can_prepare is true
+- Phase 5b: verified against a live server (7.46 MB JPEG → 1.93 MB, −72.9%, quality 88,
+  3240×2430 retained, ready/accept/file all as the zod schemas expect)
 
 Next:
-Phase 5b: frontend — DocumentUpload component per requirement slot in the wizard, showing the
-detected problem, the optimisation result (before/after + reduction %), and an Accept action
+Phase 6: AI-assisted analysis behind a replaceable interface — document-type suggestion and
+readability advice only; deterministic operations stay deterministic
 
 Known Issues:
 - Docker not installed on this machine → compose files can be authored but not run/verified here
@@ -77,6 +93,9 @@ Known Issues:
 - Whole document is held in memory during processing; upload ceiling is MAX_UPLOAD_BYTES (25 MB),
   enforced after the body is buffered — streaming rejection is a Phase 8 item
 - Optimised documents are stored unencrypted on local disk and are never purged (Phase 8)
+- DocumentOut.format is lowercase ("jpeg") while UploadOutcome.format is upper-case ("JPEG"); the
+  UI normalises both, but the contract should be made consistent
+- Preview images are re-fetched as blobs on every mount (no caching); fine at prototype scale
 
 Architecture Decisions:
 - Smart Upload engine lives in backend/app/uploadsaathi/, framework-agnostic, no Aadhaar knowledge
@@ -100,3 +119,6 @@ Architecture Decisions:
 - Upload is two-step (pending → accept): the citizen sees the result before it counts as done,
   and a not-ready file is still stored for viewing but cannot be accepted (409)
 - Plain-language citizen messages live in the API layer; the engine only emits stable issue codes
+- The upload response is the source of truth for the before/after moment; the stored row only keeps
+  the summary, so the UI shows the full result while the response is in hand
+- Auth-protected file endpoint means previews are blob URLs, revoked on unmount — never plain src

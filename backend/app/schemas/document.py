@@ -48,6 +48,7 @@ class DocumentOut(BaseModel):
     mime_type: str | None = None
     quality_status: str
     accepted: bool
+    ready: bool
     created_at: datetime
     updated_at: datetime
 

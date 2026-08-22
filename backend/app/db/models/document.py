@@ -47,3 +47,8 @@ class EnrolmentDocument(Base):
     )
 
     enrolment = relationship("Enrolment", back_populates="documents")
+
+    @property
+    def ready(self) -> bool:
+        """The engine's verdict on the stored file — distinct from `accepted`, the citizen's."""
+        return bool(self.result.get("accepted")) if self.result else False

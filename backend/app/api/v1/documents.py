@@ -244,7 +244,7 @@ def accept_document(
     _require_draft(enrolment)
     document = _get_document(document_id, enrolment, db)
 
-    if not document.result.get("accepted"):
+    if not document.ready:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "This file does not meet the portal's requirements yet, so it cannot be accepted",

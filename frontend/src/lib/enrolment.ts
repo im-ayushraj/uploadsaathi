@@ -96,6 +96,8 @@ export const progressSchema = z.object({
   personal_details: z.boolean(),
   address: z.boolean(),
   documents: z.boolean(),
+  documents_required: z.array(z.string()).default([]),
+  documents_accepted: z.array(z.string()).default([]),
   can_prepare: z.boolean(),
 })
 

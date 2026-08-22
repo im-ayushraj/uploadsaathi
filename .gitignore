@@ -21,6 +21,8 @@ backend/tmp/
 backend/uploads/
 backend/var/
 *.db
+*.stdout.log
+*.stderr.log
 
 # OS / editors
 .DS_Store

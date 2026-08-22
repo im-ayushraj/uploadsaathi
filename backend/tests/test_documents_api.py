@@ -72,6 +72,8 @@ def test_upload_optimises_and_stores_pending_document(client, auth_headers):
     assert "%" in body["message"]
     assert body["document"]["status"] == "pending"
     assert body["document"]["accepted"] is False
+    # `ready` is the engine's verdict, `accepted` is the citizen's — they are not the same thing.
+    assert body["document"]["ready"] is True
 
 
 def test_accept_marks_document_done_and_completes_the_step(client, auth_headers):
@@ -179,6 +181,7 @@ def test_document_that_is_not_ready_cannot_be_accepted(client, auth_headers):
     body = r.json()
     assert body["ready"] is False
     assert body["document"] is not None  # readable, so the citizen can still see it
+    assert body["document"]["ready"] is False
 
     blocked = client.post(
         f"/api/v1/enrolments/{enrolment_id}/documents/{body['document']['id']}/accept",
