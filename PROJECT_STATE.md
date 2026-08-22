@@ -1,10 +1,10 @@
 # UploadSaathi Project State
 
 Current Phase:
-Phase 4 — deterministic Smart Upload engine (in progress)
+Phase 4 — complete (deterministic Smart Upload engine, no AI)
 
 Current Task:
-Phase 4c: QualityValidator + UploadService (orchestration + stable UploadResult contract)
+Phase 5: wire UploadSaathi into the document step of the enrolment wizard
 
 Completed:
 - Phase 0: inspected repo (was empty), captured environment facts
@@ -38,10 +38,17 @@ Completed:
   fit-to-bounds, quality binary search then gentle downscale ladder, PDF structural clean +
   page rasterisation ladder; compliant files returned byte-identical
 - Phase 4b: 24 strategy/engine tests incl. hero case 7.46 MB JPEG → under 2 MB, readable
+- Phase 4c: engine carries physical DPI across a resize (300 dpi halved really is 150 dpi)
+- Phase 4c: QualityValidator — re-measures output bytes, per-rule verdicts, readability guardrail,
+  quality_status unchanged/passed/degraded/failed, DPI advisory only
+- Phase 4c: UploadService.process/preview (injectable collaborators) + UploadResult contract
+  (to_dict never exposes document bytes); output filename derived from the document slot
+- Phase 4c: 15 validator/service tests running against the real aadhaar.json
 
 Next:
-Phase 4c: QualityValidator (validates the *output* against the Requirement) then UploadService
-(analyze → plan → execute → validate) returning the documented UploadResult contract
+Phase 5: document upload UI + API — POST an upload for one document slot, run UploadSaathi,
+show detected issue → optimisation → before/after result → accept; persist accepted documents
+and make the wizard's `documents` step reflect them
 
 Known Issues:
 - Docker not installed on this machine → compose files can be authored but not run/verified here
@@ -56,6 +63,8 @@ Known Issues:
   revisit in Phase 8 (lossless metadata strip)
 - Converting a PDF to an image, or rasterising PDF pages to hit a size limit, removes the text
   layer; the engine warns but this is irreversible
+- min_dpi is validated as a warning, not a rejection (self-reported metadata is unreliable)
+- Whole document is held in memory during processing; no size ceiling on upload yet (Phase 8)
 
 Architecture Decisions:
 - Smart Upload engine lives in backend/app/uploadsaathi/, framework-agnostic, no Aadhaar knowledge
@@ -71,3 +80,6 @@ Architecture Decisions:
 - Engine reports failures as data (succeeded/failure_reason), never raises on bad input
 - Readability guards are hard limits: BALANCED quality>=55 & scale>=0.45, AGGRESSIVE 35 / 0.28;
   if the portal's size limit needs more than that, the engine stops and says target_met=False
+- Validation re-measures the produced bytes; the engine's own opinion of its output is not trusted
+- UploadService is the only engine entry point the API layer uses; collaborators are injected so
+  Phase 6 AI can replace analyzer/strategy without touching the API

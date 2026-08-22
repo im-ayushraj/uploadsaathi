@@ -42,23 +42,38 @@ docs/
 
 - `RequirementResolver.resolve(portal, document_type) -> Requirement`
   Requirement: allowed formats, max/min bytes, min/max dimensions, min DPI, colour mode, page limits.
-- `DocumentAnalyzer.analyze(file) -> DocumentAnalysis`
-  Real type sniffing, dimensions, pages, byte size, estimated text density/sharpness.
-- `OptimizationStrategyProvider.plan(analysis, requirement) -> OptimizationPlan`
-  Ordered deterministic steps (convert → resize → recompress → target-size search).
-- `OptimizationEngine.execute(file, plan) -> OptimizedDocument`
+- `DocumentAnalyzer.analyze(data, filename) -> DocumentAnalysis`
+  Magic-byte type sniffing (the extension is never trusted), dimensions, DPI, colour mode, alpha,
+  PDF pages / text layer / embedded images / encryption. Failures are returned as data.
+- `OptimizationStrategyProvider.plan(analysis, requirement, mode) -> OptimizationPlan`
+  Ordered deterministic steps (convert → resize → recompress → target-size search) plus the
+  readability guards for the chosen mode. An impossible conversion is returned as
+  `feasible=False` with a reason rather than attempted.
+- `OptimizationEngine.execute(data, plan) -> OptimizedDocument`
+  Quality binary search first, then a gentle downscale ladder; stops at the guards. A document
+  that already complies is returned byte-identical.
 - `QualityValidator.validate(original, optimized, requirement) -> ValidationResult`
-  Readability guardrails; refuses to silently destroy a document.
-- `UploadService.process(file, portal, document_type) -> UploadResult`
+  Re-measures the produced bytes and checks each rule separately. Readability guardrails; refuses
+  to silently destroy a document. DPI is advisory (a warning), never a hard rejection.
+- `UploadService.process(data, filename, portal, document_type, mode) -> UploadResult`
 
-`UploadResult` shape (stable contract):
+`UploadResult.to_dict()` shape (stable contract):
 ```json
 {
-  "original_size": 7759462, "optimized_size": 1908736, "format": "JPEG",
-  "reduction_percent": 75.4, "size_valid": true, "format_valid": true,
-  "quality_status": "passed", "warnings": [], "steps": ["..."]
+  "filename": "address_proof.jpg",
+  "original_size": 7458923, "optimized_size": 2021021, "format": "JPEG",
+  "mime_type": "image/jpeg", "reduction_percent": 72.9,
+  "size_valid": true, "format_valid": true, "quality_status": "passed",
+  "accepted": true, "readable": true,
+  "steps": ["auto_orient", "strip_metadata", "recompress", "target_size_search"],
+  "issues": [], "warnings": [], "notes": [],
+  "width": 3240, "height": 2430, "pages": 1,
+  "quality_used": 88, "scale_applied": 1.0, "mode": "balanced"
 }
 ```
+`quality_status` is one of `unchanged` / `passed` / `degraded` / `failed`. `accepted` is the single
+flag the UI gates on; `issues` explains a rejection, `warnings` explains a compromise. The
+document bytes are on the dataclass only and never cross the JSON boundary.
 
 ## Requirements are configuration
 

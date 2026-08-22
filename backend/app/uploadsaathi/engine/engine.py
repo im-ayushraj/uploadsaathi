@@ -75,6 +75,7 @@ class OptimizationEngine:
     def _run_image(self, data: bytes, plan: OptimizationPlan) -> OptimizedDocument:
         with Image.open(io.BytesIO(data)) as opened:
             opened.load()
+            source_dpi = _dpi_of(opened)
             img = ImageOps.exif_transpose(opened) or opened
             img = img.copy()
 
@@ -96,6 +97,7 @@ class OptimizationEngine:
             plan,
             original_byte_size=len(data),
             original_width=original_width,
+            source_dpi=source_dpi,
             steps=steps,
             warnings=warnings,
         )
@@ -121,6 +123,7 @@ class OptimizationEngine:
             plan,
             original_byte_size=len(data),
             original_width=original_width,
+            source_dpi=_PDF_WRAP_DPI,
             steps=steps,
             warnings=["pdf_converted_to_image_text_layer_removed"],
         )
@@ -184,10 +187,11 @@ class OptimizationEngine:
         *,
         original_byte_size: int,
         original_width: int,
+        source_dpi: int | None,
         steps: list[str],
         warnings: list[str],
     ) -> OptimizedDocument:
-        encoder, quality_sensitive = self._encoder_for(plan)
+        encoder, quality_sensitive = self._encoder_for(plan, source_dpi, original_width)
         best: tuple[bytes, int | None, Image.Image] | None = None
         fallback: tuple[bytes, int | None, Image.Image] | None = None
 
@@ -289,14 +293,30 @@ class OptimizationEngine:
             return floor_output
         return encoder(img, plan.quality_floor), plan.quality_floor
 
-    def _encoder_for(self, plan: OptimizationPlan) -> tuple[Encoder, bool]:
+    def _encoder_for(
+        self, plan: OptimizationPlan, source_dpi: int | None, source_width: int
+    ) -> tuple[Encoder, bool]:
+        """Build the encoder for the target format.
+
+        Physical DPI is carried over and rescaled: the same sheet of paper photographed at 300 dpi
+        and then halved in width really is 150 dpi, so that is what the output declares.
+        """
+
+        def dpi_for(img: Image.Image) -> tuple[int, int] | None:
+            if not source_dpi or not source_width:
+                return None
+            scaled = max(1, round(source_dpi * img.width / source_width))
+            return (scaled, scaled)
+
         fmt = plan.target_format
         if fmt == "pdf":
             return (
-                lambda img, quality: self._image_to_pdf(_encode_image(img, "jpeg", quality), img),
+                lambda img, quality: self._image_to_pdf(
+                    _encode_image(img, "jpeg", quality, dpi_for(img)), img
+                ),
                 True,
             )
-        return (lambda img, quality: _encode_image(img, fmt, quality)), fmt == "jpeg"
+        return (lambda img, quality: _encode_image(img, fmt, quality, dpi_for(img))), fmt == "jpeg"
 
     @staticmethod
     def _image_to_pdf(image_bytes: bytes, img: Image.Image) -> bytes:
@@ -391,17 +411,33 @@ class OptimizationEngine:
         return Image.frombytes(mode, (pixmap.width, pixmap.height), pixmap.samples)
 
 
-def _encode_image(img: Image.Image, fmt: str, quality: int) -> bytes:
-    """Encode without metadata. `quality` is ignored by PNG."""
+def _encode_image(
+    img: Image.Image, fmt: str, quality: int, dpi: tuple[int, int] | None = None
+) -> bytes:
+    """Encode without metadata, apart from the physical DPI. `quality` is ignored by PNG."""
     buf = io.BytesIO()
+    extra: dict = {"dpi": dpi} if dpi else {}
     if fmt == "jpeg":
         target = img if img.mode in ("RGB", "L") else img.convert("RGB")
-        target.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+        target.save(
+            buf, format="JPEG", quality=quality, optimize=True, progressive=True, **extra
+        )
     elif fmt == "png":
-        img.save(buf, format="PNG", optimize=True, compress_level=9)
+        img.save(buf, format="PNG", optimize=True, compress_level=9, **extra)
     else:  # pragma: no cover — guarded by the strategy provider
         raise ValueError(f"unsupported target format: {fmt}")
     return buf.getvalue()
+
+
+def _dpi_of(img: Image.Image) -> int | None:
+    dpi = img.info.get("dpi")
+    if not dpi:
+        return None
+    try:
+        value = round(float(dpi[0]))
+    except (TypeError, ValueError, IndexError):
+        return None
+    return value if 1 <= value <= 4800 else None
 
 
 def detected_format_of(data: bytes) -> str | None:
