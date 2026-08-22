@@ -71,6 +71,10 @@ Completed:
   until progress.can_prepare is true
 - Phase 5b: verified against a live server (7.46 MB JPEG → 1.93 MB, −72.9%, quality 88,
   3240×2430 retained, ready/accept/file all as the zod schemas expect)
+- Test config pass: aadhaar.json max_bytes is 500 KB (512000) for every slot, min_bytes 1 KB, and
+  the dimension floors / page limits / DPI advisory are removed from the flow slots
+- Strategy: an oversized PNG is re-encoded as JPEG when the portal accepts JPEG (lossless PNG can
+  only be shrunk by discarding pixels, which hits the readability floor first)
 
 Next:
 Phase 6: AI-assisted analysis behind a replaceable interface — document-type suggestion and
@@ -96,6 +100,14 @@ Known Issues:
 - DocumentOut.format is lowercase ("jpeg") while UploadOutcome.format is upper-case ("JPEG"); the
   UI normalises both, but the contract should be made consistent
 - Preview images are re-fetched as blobs on every mount (no caching); fine at prototype scale
+- TEMPORARY demo/test config (2026-08-22, at the user's request, to make manual testing easy):
+  every slot's max_bytes is 500 KB and the dimension floors, page limits and min_dpi advisory were
+  removed. Pre-change values, to restore later: defaults max_bytes 2097152 / min_bytes 20480 /
+  min_width 600 / min_height 400 / min_dpi 150 / max_pages 4; identity_proof 2097152 + 700×450;
+  address_proof 2097152 + 800×600 + max_pages 4; dob_proof and relationship_proof 1572864;
+  photograph 204800 + min_bytes 10240
+- Because the flow slots now declare no minimum dimensions, the engine's own readability floor
+  applies instead: an image below roughly 100,000 px (~400×250) is refused as unreadable
 
 Architecture Decisions:
 - Smart Upload engine lives in backend/app/uploadsaathi/, framework-agnostic, no Aadhaar knowledge
@@ -122,3 +134,5 @@ Architecture Decisions:
 - The upload response is the source of truth for the before/after moment; the stored row only keeps
   the summary, so the UI shows the full result while the response is in hand
 - Auth-protected file endpoint means previews are blob URLs, revoked on unmount — never plain src
+- A lossless source (PNG) that exceeds the size limit is re-encoded to JPEG when the portal accepts
+  JPEG; a PNG that already complies is still passed through byte-identical

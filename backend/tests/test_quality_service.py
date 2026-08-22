@@ -137,7 +137,7 @@ def test_service_hero_journey_on_real_aadhaar_config():
     assert result.accepted
     assert result.readable
     assert result.original_size == len(data)
-    assert result.optimized_size <= 2_097_152  # aadhaar.json default max_bytes
+    assert result.optimized_size <= 512_000  # aadhaar.json default max_bytes
     assert result.format == "jpeg"
     assert result.to_dict()["format"] == "JPEG"  # contract uses the display form
     assert result.mime_type == "image/jpeg"
@@ -171,12 +171,12 @@ def test_service_result_dict_matches_documented_contract():
 
 
 def test_service_photograph_slot_enforces_its_tighter_rules():
-    # aadhaar.json photograph: max 200 KB, min 350x450, colour, no PDF.
+    # aadhaar.json photograph: min 350x450, colour, no PDF, single page.
     result = service.process(
         make_image(2000, 2600, fmt="JPEG", quality=95), "me.jpg", "aadhaar", "photograph"
     )
     assert result.accepted
-    assert result.optimized_size <= 204_800
+    assert result.optimized_size <= 512_000
     assert result.width is not None and result.width >= 350
     assert result.height is not None and result.height >= 450
 
@@ -202,6 +202,6 @@ def test_service_preview_decides_without_processing():
     data = make_oversized_jpeg()
     analysis, req, plan = service.preview(data, "bill.jpg", "aadhaar", "address_proof")
     assert analysis.byte_size == len(data)
-    assert req.max_bytes == 2_097_152
+    assert req.max_bytes == 512_000
     assert plan.needs_work
     assert plan.feasible

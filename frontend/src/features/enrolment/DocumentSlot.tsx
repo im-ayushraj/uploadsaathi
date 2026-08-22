@@ -19,7 +19,7 @@ const STEP_LABELS: Record<string, string> = {
   strip_metadata: 'Removed hidden camera data',
   flatten_alpha: 'Placed the image on a white background',
   greyscale: 'Converted to black and white',
-  convert: 'Converted to an accepted file type',
+  convert: 'Changed the file type to fit the portal’s rules',
   resize: 'Resized to fit the portal’s limits',
   recompress: 'Compressed the image',
   target_size_search: 'Found the highest quality that still fits the size limit',

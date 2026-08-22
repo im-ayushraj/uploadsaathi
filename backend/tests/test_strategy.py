@@ -78,6 +78,24 @@ def test_png_converted_to_jpeg_and_alpha_flattened():
     assert "transparency_flattened_onto_white" in plan.notes
 
 
+def test_oversized_png_is_re_encoded_as_jpeg_even_though_png_is_accepted():
+    # PNG is lossless, so shrinking it means throwing away pixels. When JPEG is also accepted,
+    # re-encoding keeps the document readable instead of downscaling it into mush.
+    data = make_image(1600, 1200, fmt="PNG")
+    plan = provider.plan(analyzer.analyze(data, "screenshot.png"), requirement(max_bytes=200_000))
+    assert plan.source_format == "png"
+    assert plan.target_format == "jpeg"
+    assert Operation.CONVERT in plan.operations
+    assert "png_re_encoded_as_jpeg_to_meet_size_limit" in plan.notes
+
+
+def test_compliant_png_is_left_as_png():
+    data = make_image(400, 300, fmt="PNG")
+    plan = provider.plan(analyzer.analyze(data, "screenshot.png"), requirement(max_bytes=5_000_000))
+    assert plan.target_format == "png"
+    assert plan.needs_work is False
+
+
 def test_greyscale_requirement_adds_greyscale_step():
     plan = provider.plan(
         analyzer.analyze(make_image(800, 600, fmt="JPEG")),

@@ -25,16 +25,17 @@ def test_portal_metadata_carries_prototype_notes():
 
 def test_defaults_merge_with_document_overrides():
     poa = resolver.resolve("aadhaar", "address_proof")
-    assert poa.max_bytes == 2 * 1024 * 1024
-    assert poa.min_bytes == 20480  # inherited from portal defaults
-    assert poa.min_width == 800  # overridden by the document type
+    assert poa.max_bytes == 512_000
+    assert poa.min_bytes == 1024  # inherited from portal defaults
+    assert poa.min_width is None  # dimension floors are off in the current demo config
+    assert poa.max_pages is None
     assert poa.accepts_format(".JPG")
     assert not poa.accepts_format("bmp")
 
 
 def test_photograph_overrides_are_stricter():
     photo = resolver.resolve("aadhaar", "photograph")
-    assert photo.max_bytes == 204800
+    assert photo.min_width == 350  # overridden by the document type
     assert photo.max_pages == 1
     assert photo.colour_mode == "colour"
     assert "pdf" not in photo.accepted_formats

@@ -66,7 +66,7 @@ def test_upload_optimises_and_stores_pending_document(client, auth_headers):
 
     assert body["ready"] is True
     assert body["outcome"]["original_size"] == len(data)
-    assert body["outcome"]["optimized_size"] <= 2_097_152
+    assert body["outcome"]["optimized_size"] <= 512_000
     assert body["outcome"]["format"] == "JPEG"
     assert body["outcome"]["readable"] is True
     assert "%" in body["message"]

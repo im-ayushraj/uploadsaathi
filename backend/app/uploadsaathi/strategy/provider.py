@@ -32,7 +32,9 @@ class OptimizationStrategyProvider:
         source = analysis.detected_format or "unknown"
         accepted = tuple(canonical_format(f) or f for f in requirement.accepted_formats)
 
-        target, convert_note, infeasible = self._choose_target(source, accepted, analysis)
+        target, convert_note, infeasible = self._choose_target(
+            source, accepted, analysis, requirement
+        )
         aggressive = mode is OptimizationMode.AGGRESSIVE
 
         base = dict(
@@ -95,7 +97,10 @@ class OptimizationStrategyProvider:
 
     @staticmethod
     def _choose_target(
-        source: str, accepted: tuple[str, ...], analysis: DocumentAnalysis
+        source: str,
+        accepted: tuple[str, ...],
+        analysis: DocumentAnalysis,
+        requirement: Requirement,
     ) -> tuple[str, str | None, str | None]:
         """Returns (target_format, conversion_note, infeasible_reason)."""
         if not analysis.is_usable:
@@ -103,6 +108,16 @@ class OptimizationStrategyProvider:
         if not accepted:
             return source, None, "no_accepted_formats_configured"
         if source in accepted:
+            # PNG is lossless, so the only way to shrink it is to throw away pixels — which hits
+            # the readability floor long before a tight size limit is met. When the portal also
+            # accepts JPEG, re-encoding is the readable way to fit (a screenshot of a document is
+            # the common case).
+            if (
+                source == "png"
+                and "jpeg" in accepted
+                and analysis.byte_size > requirement.max_bytes
+            ):
+                return "jpeg", "png_re_encoded_as_jpeg_to_meet_size_limit", None
             return source, None, None
 
         # Conversion is required. Prefer a target that preserves the document's nature.

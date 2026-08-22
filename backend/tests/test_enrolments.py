@@ -60,7 +60,7 @@ def test_documents_endpoint_is_config_driven(client: TestClient):
     assert r.status_code == 200
     docs = r.json()
     assert [d["id"] for d in docs] == ["identity_proof", "address_proof", "dob_proof"]
-    assert docs[0]["requirement"]["max_bytes"] == 2097152
+    assert docs[0]["requirement"]["max_bytes"] == 512000
     bad = client.get("/api/v1/portals/aadhaar/documents", params={"applicant_type": "nope"})
     assert bad.status_code == 404
 
