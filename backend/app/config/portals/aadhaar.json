@@ -1,0 +1,125 @@
+{
+  "portal_id": "aadhaar",
+  "portal_name": "Aadhaar Enrolment — Document Preparation",
+  "authority_note": "Prototype inspired by the UIDAI Aadhaar enrolment journey. Not affiliated with or endorsed by UIDAI. Requirement values below are illustrative demo configuration.",
+  "config_version": "0.1.0",
+  "journey_note": "This prototype prepares the digital/document portion of the journey. Real Aadhaar enrolment requires visiting an Aadhaar Enrolment Centre for biometric capture.",
+  "defaults": {
+    "accepted_formats": ["jpg", "jpeg", "png", "pdf"],
+    "max_bytes": 2097152,
+    "min_bytes": 20480,
+    "min_width": 600,
+    "min_height": 400,
+    "max_width": 5000,
+    "max_height": 5000,
+    "min_dpi": 150,
+    "max_pages": 4,
+    "colour_mode": "any"
+  },
+  "applicant_types": [
+    {
+      "id": "adult",
+      "label": "Adult (18 years and above)",
+      "description": "Applying for yourself. You will need identity, address and date-of-birth proof.",
+      "required_documents": ["identity_proof", "address_proof", "dob_proof"],
+      "is_primary_demo": true
+    },
+    {
+      "id": "minor_5_17",
+      "label": "Child (5 to 17 years)",
+      "description": "A parent or guardian applies on the child's behalf and provides their own proof of identity.",
+      "required_documents": ["identity_proof", "address_proof", "dob_proof", "relationship_proof"]
+    },
+    {
+      "id": "child_below_5",
+      "label": "Child (below 5 years)",
+      "description": "Enrolment is linked to a parent or guardian. Birth certificate and relationship proof are required.",
+      "required_documents": ["dob_proof", "relationship_proof", "address_proof"]
+    }
+  ],
+  "document_types": {
+    "identity_proof": {
+      "label": "Proof of Identity",
+      "short_label": "PoI",
+      "help": "A document showing your name and photograph.",
+      "examples": [
+        "PAN card",
+        "Passport",
+        "Voter ID card",
+        "Driving licence",
+        "School / college photo ID"
+      ],
+      "requirements": {
+        "accepted_formats": ["jpg", "jpeg", "png", "pdf"],
+        "max_bytes": 2097152,
+        "min_width": 700,
+        "min_height": 450
+      }
+    },
+    "address_proof": {
+      "label": "Proof of Address",
+      "short_label": "PoA",
+      "help": "A recent document showing your name and current address.",
+      "examples": [
+        "Electricity bill (last 3 months)",
+        "Water bill (last 3 months)",
+        "Bank passbook with address",
+        "Rent agreement",
+        "Gas connection bill"
+      ],
+      "requirements": {
+        "accepted_formats": ["jpg", "jpeg", "png", "pdf"],
+        "max_bytes": 2097152,
+        "max_pages": 4,
+        "min_width": 800,
+        "min_height": 600
+      }
+    },
+    "dob_proof": {
+      "label": "Proof of Date of Birth",
+      "short_label": "DoB",
+      "help": "A document that states your date of birth.",
+      "examples": [
+        "Birth certificate",
+        "SSLC / Class 10 marksheet",
+        "Passport",
+        "School leaving certificate"
+      ],
+      "requirements": {
+        "accepted_formats": ["jpg", "jpeg", "png", "pdf"],
+        "max_bytes": 1572864
+      }
+    },
+    "relationship_proof": {
+      "label": "Proof of Relationship",
+      "short_label": "PoR",
+      "help": "A document linking the child to the parent or guardian.",
+      "examples": [
+        "Birth certificate naming the parent",
+        "Ration card listing both names",
+        "Government-issued family entitlement document"
+      ],
+      "requirements": {
+        "accepted_formats": ["jpg", "jpeg", "png", "pdf"],
+        "max_bytes": 1572864
+      }
+    },
+    "photograph": {
+      "label": "Passport-size photograph",
+      "short_label": "Photo",
+      "help": "A clear, front-facing photograph on a plain background.",
+      "examples": ["Recent passport-size photo"],
+      "requirements": {
+        "accepted_formats": ["jpg", "jpeg", "png"],
+        "max_bytes": 204800,
+        "min_bytes": 10240,
+        "min_width": 350,
+        "min_height": 450,
+        "max_width": 1200,
+        "max_height": 1600,
+        "max_pages": 1,
+        "colour_mode": "colour"
+      }
+    }
+  }
+}

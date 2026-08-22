@@ -1,22 +1,7 @@
-"""Auth tests run against a throwaway SQLite file with a fresh schema."""
-
-import os
-import tempfile
+"""Auth endpoint tests. Database and TestClient come from conftest."""
 
 import pytest
-
-os.environ["DATABASE_URL"] = (
-    "sqlite+pysqlite:///" + tempfile.mkdtemp(prefix="us_test_").replace("\\", "/") + "/test.db"
-)
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.db.models import User  # noqa: E402,F401  (registers the table)
-from app.db.session import Base, engine  # noqa: E402
-from app.main import app  # noqa: E402
-
-Base.metadata.create_all(bind=engine)
-client = TestClient(app)
+from fastapi.testclient import TestClient
 
 ACCOUNT = {
     "full_name": "Demo Applicant",
@@ -27,7 +12,7 @@ ACCOUNT = {
 
 
 @pytest.fixture(scope="module")
-def token() -> str:
+def token(client: TestClient) -> str:
     r = client.post("/api/v1/auth/signup", json=ACCOUNT)
     assert r.status_code == 201, r.text
     body = r.json()
@@ -36,23 +21,23 @@ def token() -> str:
     return body["access_token"]
 
 
-def test_signup_rejects_duplicate(token: str):
+def test_signup_rejects_duplicate(client: TestClient, token: str):
     r = client.post("/api/v1/auth/signup", json=ACCOUNT)
     assert r.status_code == 409
 
 
-def test_signup_rejects_bad_mobile():
+def test_signup_rejects_bad_mobile(client: TestClient):
     bad = {**ACCOUNT, "email": "x@example.com", "mobile": "12345"}
     assert client.post("/api/v1/auth/signup", json=bad).status_code == 422
 
 
-def test_signup_rejects_short_password():
+def test_signup_rejects_short_password(client: TestClient):
     bad = {**ACCOUNT, "email": "y@example.com", "mobile": "9000000001", "password": "short"}
     assert client.post("/api/v1/auth/signup", json=bad).status_code == 422
 
 
 @pytest.mark.parametrize("identifier", [ACCOUNT["email"], ACCOUNT["mobile"], "+91 98765 43210"])
-def test_login_with_email_or_mobile(token: str, identifier: str):
+def test_login_with_email_or_mobile(client: TestClient, token: str, identifier: str):
     r = client.post(
         "/api/v1/auth/login",
         json={"identifier": identifier, "password": ACCOUNT["password"]},
@@ -61,7 +46,7 @@ def test_login_with_email_or_mobile(token: str, identifier: str):
     assert r.json()["token_type"] == "bearer"
 
 
-def test_login_wrong_password(token: str):
+def test_login_wrong_password(client: TestClient, token: str):
     r = client.post(
         "/api/v1/auth/login",
         json={"identifier": ACCOUNT["email"], "password": "WrongPass123"},
@@ -70,18 +55,18 @@ def test_login_wrong_password(token: str):
     assert "email/mobile or password" in r.json()["detail"]
 
 
-def test_me_requires_token():
+def test_me_requires_token(client: TestClient):
     assert client.get("/api/v1/auth/me").status_code == 401
     r = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     assert r.status_code == 401
 
 
-def test_me_with_token(token: str):
+def test_me_with_token(client: TestClient, token: str):
     r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json()["mobile"] == ACCOUNT["mobile"]
 
 
-def test_logout(token: str):
+def test_logout(client: TestClient, token: str):
     r = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
