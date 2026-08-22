@@ -28,20 +28,14 @@ def make_image(
     img = Image.new("RGB", (width, height), (246, 244, 238))
 
     if noise:
-        # Block noise keeps generation fast while still defeating JPEG's DCT.
-        block = 8
-        px = img.load()
-        for by in range(0, height, block):
-            for bx in range(0, width, block):
-                jitter = rng.randint(-26, 26)
-                colour = (
-                    max(0, min(255, 232 + jitter)),
-                    max(0, min(255, 230 + jitter)),
-                    max(0, min(255, 224 + jitter)),
-                )
-                for y in range(by, min(by + block, height)):
-                    for x in range(bx, min(bx + block, width)):
-                        px[x, y] = colour
+        # Grain from a downscaled random tile: fast (C-level randbytes + resize) and, once blended,
+        # incompressible enough that JPEG size tests exercise real behaviour.
+        tile_w, tile_h = max(1, width // 3), max(1, height // 3)
+        raw = rng.randbytes(tile_w * tile_h * 3)
+        grain = Image.frombytes("RGB", (tile_w, tile_h), raw).resize(
+            (width, height), Image.Resampling.BILINEAR
+        )
+        img = Image.blend(img, grain, 0.28)
 
     draw = ImageDraw.Draw(img)
     draw.rectangle([20, 20, width - 20, height - 20], outline=(60, 60, 60), width=3)
