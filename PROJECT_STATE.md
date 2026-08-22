@@ -1,10 +1,11 @@
 # UploadSaathi Project State
 
 Current Phase:
-Phase 4 — complete (deterministic Smart Upload engine, no AI)
+Phase 5 — in progress (upload API done, wizard UI next)
 
 Current Task:
-Phase 5: wire UploadSaathi into the document step of the enrolment wizard
+Phase 5b: document upload UI in the wizard (select file → detected issue → optimising → before/after
+→ accept), driven by the /enrolments/{id}/documents endpoints
 
 Completed:
 - Phase 0: inspected repo (was empty), captured environment facts
@@ -44,11 +45,20 @@ Completed:
 - Phase 4c: UploadService.process/preview (injectable collaborators) + UploadResult contract
   (to_dict never exposes document bytes); output filename derived from the document slot
 - Phase 4c: 15 validator/service tests running against the real aadhaar.json
+- Phase 5a: DocumentStorage (opaque random keys, path-traversal guard, optimised bytes only) +
+  STORAGE_DIR / MAX_UPLOAD_BYTES settings
+- Phase 5a: EnrolmentDocument model + migration (one row per enrolment+slot, JSON result report)
+- Phase 5a: POST/GET/GET {id}/GET {id}/file/POST {id}/accept/DELETE under
+  /enrolments/{id}/documents; two-step flow (pending preview → explicit accept)
+- Phase 5a: engine issue codes translated to plain-language citizen messages in the API layer
+- Phase 5a: EnrolmentProgress.documents is now real (all config-required slots accepted) and
+  prepare() refuses until every required document is accepted
+- Phase 5a: 12 document API tests (hero upload, accept→can_prepare, replace, download, corrupt
+  file, multi-page PDF for photograph, accept blocked, delete, ownership, prepared lock)
 
 Next:
-Phase 5: document upload UI + API — POST an upload for one document slot, run UploadSaathi,
-show detected issue → optimisation → before/after result → accept; persist accepted documents
-and make the wizard's `documents` step reflect them
+Phase 5b: frontend — DocumentUpload component per requirement slot in the wizard, showing the
+detected problem, the optimisation result (before/after + reduction %), and an Accept action
 
 Known Issues:
 - Docker not installed on this machine → compose files can be authored but not run/verified here
@@ -57,14 +67,16 @@ Known Issues:
 - Vite dev server binds localhost (not 127.0.0.1); use http://localhost:5173
 - JWT stored in localStorage (prototype tradeoff); revisit in Phase 8
 - No refresh tokens / no rate limiting yet (Phase 8)
-- documents step in EnrolmentProgress is always false until Phase 5 wires uploads;
-  prepare() therefore does not yet require documents
+- documents step in EnrolmentProgress is real as of Phase 5a: it is true only when every
+  config-required slot has an accepted document
 - A compliant file is passed through untouched, so its EXIF (incl. GPS) is not stripped;
   revisit in Phase 8 (lossless metadata strip)
 - Converting a PDF to an image, or rasterising PDF pages to hit a size limit, removes the text
   layer; the engine warns but this is irreversible
 - min_dpi is validated as a warning, not a rejection (self-reported metadata is unreliable)
-- Whole document is held in memory during processing; no size ceiling on upload yet (Phase 8)
+- Whole document is held in memory during processing; upload ceiling is MAX_UPLOAD_BYTES (25 MB),
+  enforced after the body is buffered — streaming rejection is a Phase 8 item
+- Optimised documents are stored unencrypted on local disk and are never purged (Phase 8)
 
 Architecture Decisions:
 - Smart Upload engine lives in backend/app/uploadsaathi/, framework-agnostic, no Aadhaar knowledge
@@ -83,3 +95,8 @@ Architecture Decisions:
 - Validation re-measures the produced bytes; the engine's own opinion of its output is not trusted
 - UploadService is the only engine entry point the API layer uses; collaborators are injected so
   Phase 6 AI can replace analyzer/strategy without touching the API
+- Only the optimised file is persisted; the original bytes are never written to disk
+- Storage keys are opaque random hex, so a document id never reveals a filesystem path
+- Upload is two-step (pending → accept): the citizen sees the result before it counts as done,
+  and a not-ready file is still stored for viewing but cannot be accepted (409)
+- Plain-language citizen messages live in the API layer; the engine only emits stable issue codes

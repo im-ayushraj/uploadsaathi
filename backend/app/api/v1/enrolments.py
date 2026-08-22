@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_owned_enrolment
 from app.db.models.enrolment import Enrolment
 from app.db.models.user import User
 from app.db.session import get_db
@@ -42,17 +42,31 @@ def _validate_applicant_type(portal_id: str, applicant_type: str) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown applicant type")
 
 
+def _required_document_types(enrolment: Enrolment) -> list[str]:
+    """From portal configuration, never hardcoded here."""
+    try:
+        return [
+            doc.id
+            for doc in get_resolver().documents_for(enrolment.portal_id, enrolment.applicant_type)
+        ]
+    except (PortalNotFoundError, ApplicantTypeNotFoundError):
+        return []
+
+
 def _progress(enrolment: Enrolment) -> EnrolmentProgress:
     has_personal = bool(enrolment.personal_details)
     has_address = bool(enrolment.address)
-    # Document upload arrives in Phase 5; until then the documents step is informational.
-    documents_done = False
+    required = _required_document_types(enrolment)
+    accepted = {doc.document_type for doc in enrolment.documents if doc.accepted}
+    documents_done = bool(required) and all(slot in accepted for slot in required)
     return EnrolmentProgress(
         applicant_type=bool(enrolment.applicant_type),
         personal_details=has_personal,
         address=has_address,
         documents=documents_done,
-        can_prepare=has_personal and has_address,
+        documents_required=required,
+        documents_accepted=sorted(accepted),
+        can_prepare=has_personal and has_address and documents_done,
     )
 
 
@@ -61,14 +75,6 @@ def _detail(enrolment: Enrolment) -> EnrolmentDetail:
         **EnrolmentOut.model_validate(enrolment).model_dump(),
         progress=_progress(enrolment),
     )
-
-
-def _get_owned(enrolment_id: int, user: User, db: Session) -> Enrolment:
-    enrolment = db.get(Enrolment, enrolment_id)
-    # Do not leak the existence of another user's record.
-    if enrolment is None or enrolment.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Application not found")
-    return enrolment
 
 
 def _require_draft(enrolment: Enrolment) -> None:
@@ -108,7 +114,7 @@ def list_enrolments(
 def get_enrolment(
     enrolment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> EnrolmentDetail:
-    return _detail(_get_owned(enrolment_id, user, db))
+    return _detail(get_owned_enrolment(enrolment_id, user, db))
 
 
 @router.patch("/{enrolment_id}", response_model=EnrolmentDetail)
@@ -118,7 +124,7 @@ def update_enrolment(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> EnrolmentDetail:
-    enrolment = _get_owned(enrolment_id, user, db)
+    enrolment = get_owned_enrolment(enrolment_id, user, db)
     _require_draft(enrolment)
 
     if payload.applicant_type is not None:
@@ -139,7 +145,7 @@ def prepare_enrolment(
     enrolment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> EnrolmentDetail:
     """Marks the document pack as prepared. Nothing is submitted to any government system."""
-    enrolment = _get_owned(enrolment_id, user, db)
+    enrolment = get_owned_enrolment(enrolment_id, user, db)
     if enrolment.status == "prepared":
         return _detail(enrolment)
 
@@ -150,6 +156,7 @@ def prepare_enrolment(
             for name, done in (
                 ("personal details", progress.personal_details),
                 ("address", progress.address),
+                ("all required documents", progress.documents),
             )
             if not done
         ]
@@ -170,7 +177,7 @@ def prepare_enrolment(
 def delete_enrolment(
     enrolment_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> None:
-    enrolment = _get_owned(enrolment_id, user, db)
+    enrolment = get_owned_enrolment(enrolment_id, user, db)
     db.delete(enrolment)
     db.commit()
 

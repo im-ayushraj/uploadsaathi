@@ -19,6 +19,8 @@ dist/
 # Uploads / temp
 backend/tmp/
 backend/uploads/
+backend/var/
+*.db
 
 # OS / editors
 .DS_Store

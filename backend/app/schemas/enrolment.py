@@ -76,6 +76,8 @@ class EnrolmentProgress(BaseModel):
     personal_details: bool
     address: bool
     documents: bool
+    documents_required: list[str] = []
+    documents_accepted: list[str] = []
     can_prepare: bool
 
 

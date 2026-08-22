@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
+from app.db.models.enrolment import Enrolment
 from app.db.models.user import User
 from app.db.session import get_db
 
@@ -32,3 +33,15 @@ def get_current_user(
     if user is None:
         raise CREDENTIALS_ERROR
     return user
+
+
+def get_owned_enrolment(enrolment_id: int, user: User, db: Session) -> Enrolment:
+    """Fetch an application the caller owns.
+
+    Someone else's application is reported as 404, not 403, so the API never confirms that a
+    given id exists.
+    """
+    enrolment = db.get(Enrolment, enrolment_id)
+    if enrolment is None or enrolment.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Application not found")
+    return enrolment

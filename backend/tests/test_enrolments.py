@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from .synthetic import make_image
+
 ADULT_PERSONAL = {
     "full_name": "Anita Sharma",
     "date_of_birth": "1994-06-12",
@@ -23,6 +25,25 @@ def _create(client: TestClient, headers: dict[str, str], applicant_type: str = "
     r = client.post("/api/v1/enrolments", json={"applicant_type": applicant_type}, headers=headers)
     assert r.status_code == 201, r.text
     return r.json()
+
+
+def _accept_all_documents(client: TestClient, headers: dict[str, str], eid: int) -> None:
+    """Upload and accept every document the portal configuration asks for."""
+    detail = client.get(f"/api/v1/enrolments/{eid}", headers=headers).json()
+    for slot in detail["progress"]["documents_required"]:
+        r = client.post(
+            f"/api/v1/enrolments/{eid}/documents",
+            data={"document_type": slot},
+            files={"file": ("proof.jpg", make_image(1400, 1000), "image/jpeg")},
+            headers=headers,
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["ready"] is True, r.json()["message"]
+        document_id = r.json()["document"]["id"]
+        accepted = client.post(
+            f"/api/v1/enrolments/{eid}/documents/{document_id}/accept", headers=headers
+        )
+        assert accepted.status_code == 200, accepted.text
 
 
 def test_portal_config_endpoint(client: TestClient):
@@ -72,7 +93,17 @@ def test_full_draft_to_prepared_flow(client: TestClient, auth_headers):
     assert r.json()["progress"]["personal_details"] is True
 
     r = client.patch(f"/api/v1/enrolments/{eid}", json={"address": ADDRESS}, headers=auth_headers)
-    assert r.json()["progress"]["can_prepare"] is True
+    assert r.json()["progress"]["address"] is True
+    # Documents are the last gate: details alone are not enough to prepare.
+    assert r.json()["progress"]["can_prepare"] is False
+
+    _accept_all_documents(client, auth_headers, eid)
+    assert (
+        client.get(f"/api/v1/enrolments/{eid}", headers=auth_headers).json()["progress"][
+            "can_prepare"
+        ]
+        is True
+    )
 
     r = client.post(f"/api/v1/enrolments/{eid}/prepare", headers=auth_headers)
     assert r.status_code == 200

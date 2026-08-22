@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed browser origins.
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Where optimised documents are kept. Originals are never written to disk.
+    STORAGE_DIR: str = "./var/documents"
+    # Refuse an upload larger than this before any processing starts.
+    MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

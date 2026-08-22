@@ -37,3 +37,9 @@ class Enrolment(Base):
     )
 
     user = relationship("User")
+    documents = relationship(
+        "EnrolmentDocument",
+        back_populates="enrolment",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
