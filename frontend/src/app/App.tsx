@@ -7,6 +7,12 @@ import { RedirectIfAuthenticated, RequireAuth } from '../features/auth/RequireAu
 import { LoginPage } from '../features/auth/LoginPage'
 import { SignupPage } from '../features/auth/SignupPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
+import { ApplicantTypePage } from '../features/enrolment/ApplicantTypePage'
+import { PersonalDetailsPage } from '../features/enrolment/PersonalDetailsPage'
+import { AddressPage } from '../features/enrolment/AddressPage'
+import { DocumentRequirementsPage } from '../features/enrolment/DocumentRequirementsPage'
+import { ReviewPage } from '../features/enrolment/ReviewPage'
+import { PreparedPage } from '../features/enrolment/PreparedPage'
 
 export default function App() {
   return (
@@ -25,6 +31,12 @@ export default function App() {
 
             <Route element={<RequireAuth />}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/enrolment/new" element={<ApplicantTypePage />} />
+              <Route path="/enrolment/:id/personal" element={<PersonalDetailsPage />} />
+              <Route path="/enrolment/:id/address" element={<AddressPage />} />
+              <Route path="/enrolment/:id/documents" element={<DocumentRequirementsPage />} />
+              <Route path="/enrolment/:id/review" element={<ReviewPage />} />
+              <Route path="/enrolment/:id/prepared" element={<PreparedPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

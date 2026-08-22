@@ -1,10 +1,10 @@
 # UploadSaathi Project State
 
 Current Phase:
-Phase 2 — complete
+Phase 3 — complete
 
 Current Task:
-Phase 2: authentication — done
+Phase 3: Aadhaar enrolment journey — done
 
 Completed:
 - Phase 0: inspected repo (was empty), captured environment facts
@@ -21,10 +21,18 @@ Completed:
 - Phase 2: get_current_user HTTPBearer dependency; generic login error message
 - Phase 2: frontend AuthProvider + token store, axios auth/401 interceptors, RequireAuth /
   RedirectIfAuthenticated route guards, Login/Signup pages, AppHeader with logout, Dashboard stub
+- Phase 3: app/config/portals/aadhaar.json (3 applicant types, 5 document types, defaults+overrides)
+- Phase 3: RequirementResolver + Requirement/DocumentTypeInfo/ApplicantType/PortalInfo models
+- Phase 3: GET /portals, /portals/{id}, /portals/{id}/documents?applicant_type=
+- Phase 3: Enrolment model + migration; POST/GET/PATCH/DELETE /enrolments, POST /{id}/prepare
+- Phase 3: ownership checks (404 for other users), prepared drafts immutable, idempotent prepare
+- Phase 3: wizard UI — applicant type, personal details, address, document requirements, review,
+  prepared (centre info + honest disclaimer); dashboard lists/resumes/deletes applications
+- Phase 3: tests/conftest.py with isolated SQLite + client/auth_headers fixtures
 
 Next:
-Phase 3: Aadhaar journey — portal requirement config (aadhaar.json) + RequirementResolver,
-then enrolment model and the applicant-type/personal-details/address steps
+Phase 4: deterministic Smart Upload engine — DocumentAnalyzer first (real file-type sniffing,
+dimensions, page count, byte size) with tests on synthetic images/PDFs
 
 Known Issues:
 - Docker not installed on this machine → compose files can be authored but not run/verified here
@@ -34,6 +42,8 @@ Known Issues:
 - Vite dev server binds localhost (not 127.0.0.1); use http://localhost:5173
 - JWT stored in localStorage (prototype tradeoff); revisit in Phase 8
 - No refresh tokens / no rate limiting yet (Phase 8)
+- documents step in EnrolmentProgress is always false until Phase 5 wires uploads;
+  prepare() therefore does not yet require documents
 
 Architecture Decisions:
 - Smart Upload engine lives in backend/app/uploadsaathi/, framework-agnostic, no Aadhaar knowledge
@@ -43,3 +53,6 @@ Architecture Decisions:
 - API prefix /api/v1
 - Auth: stateless JWT access token only; logout is client-side token discard
 - Login accepts email or 10-digit Indian mobile (normalised, +91/0 tolerated)
+- Enrolment personal_details/address stored as JSON columns (portal-neutral); no Aadhaar number field
+- Wizard step completeness computed backend-side (EnrolmentProgress), not in React
+- Prototype reference code format PREP-XXXXXXXX, deliberately unlike a real UIDAI EID/URN
