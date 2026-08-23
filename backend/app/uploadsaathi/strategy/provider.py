@@ -185,10 +185,13 @@ class OptimizationStrategyProvider:
             return ops
 
         # Structure/metadata cleanup is safe and often enough on its own, but a PDF that already
-        # complies is left byte-identical rather than rewritten.
+        # complies is left byte-identical rather than rewritten. Recompressing the embedded images
+        # comes next, and rasterising the pages is permitted only as a last resort — the engine
+        # takes it only if it is what finally brings the file under the limit.
         if analysis.byte_size > requirement.max_bytes:
             ops.append(Operation.PDF_OPTIMISE_STRUCTURE)
             ops.append(Operation.PDF_DOWNSAMPLE_IMAGES)
+            ops.append(Operation.PDF_RASTERISE_PAGES)
         if requirement.max_pages and (analysis.pages or 0) > requirement.max_pages:
             notes.append("too_many_pages_for_portal")
         return ops
@@ -212,5 +215,6 @@ _ORDER: tuple[Operation, ...] = (
     Operation.RECOMPRESS,
     Operation.PDF_OPTIMISE_STRUCTURE,
     Operation.PDF_DOWNSAMPLE_IMAGES,
+    Operation.PDF_RASTERISE_PAGES,
     Operation.TARGET_SIZE_SEARCH,
 )

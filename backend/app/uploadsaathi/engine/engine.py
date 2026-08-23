@@ -333,28 +333,36 @@ class OptimizationEngine:
         steps: list[str] = []
         warnings: list[str] = []
 
-        with pymupdf.open(stream=data, filetype="pdf") as doc:
-            cleaned = doc.tobytes(garbage=4, deflate=True, clean=True)
-
+        best = self._clean_pdf(data)
         # A structural pass can grow tiny PDFs; only keep it if it actually helped.
-        if len(cleaned) < len(data):
+        if len(best) < len(data):
             steps.append(Operation.PDF_OPTIMISE_STRUCTURE.value)
         else:
-            cleaned = data
+            best = data
 
-        best = cleaned
-        used_dpi: int | None = None
-        if len(best) > plan.max_bytes and Operation.PDF_DOWNSAMPLE_IMAGES in plan.operations:
+        may_downsample = Operation.PDF_DOWNSAMPLE_IMAGES in plan.operations
+
+        # Recompressing the images *inside* the PDF keeps the pages, the layout and the selectable
+        # text, so it is always tried before anything destructive.
+        if len(best) > plan.max_bytes and may_downsample:
+            shrunk = self._downsample_pdf_images(data, plan)
+            if shrunk is not None and len(shrunk) < len(best):
+                best = shrunk
+                steps.append(Operation.PDF_DOWNSAMPLE_IMAGES.value)
+
+        # Rasterising every page removes the text layer for good, so it is only worth doing when it
+        # actually gets the document under the limit. Shaving a few bytes off is not worth it.
+        if (
+            len(best) > plan.max_bytes
+            and Operation.PDF_RASTERISE_PAGES in plan.operations
+        ):
             for dpi in self._raster_dpi_ladder(plan):
                 candidate = self._rasterise_pdf(data, plan, dpi)
-                if len(candidate) < len(best):
-                    best, used_dpi = candidate, dpi
                 if len(candidate) <= plan.max_bytes:
-                    best, used_dpi = candidate, dpi
+                    best = candidate
+                    steps.append(Operation.PDF_RASTERISE_PAGES.value)
+                    warnings.append(f"pages_rasterised_at_{dpi}dpi_text_layer_removed")
                     break
-            if used_dpi is not None:
-                steps.append(Operation.PDF_DOWNSAMPLE_IMAGES.value)
-                warnings.append(f"pages_rasterised_at_{used_dpi}dpi_text_layer_removed")
 
         if Operation.TARGET_SIZE_SEARCH in plan.operations:
             steps.append(Operation.TARGET_SIZE_SEARCH.value)
@@ -378,6 +386,103 @@ class OptimizationEngine:
             pages=pages,
             steps_applied=tuple(dict.fromkeys(steps)),
             warnings=tuple(dict.fromkeys(warnings)),
+        )
+
+    @staticmethod
+    def _clean_pdf(data: bytes) -> bytes:
+        """Lossless housekeeping: drop unused objects, deflate streams, subset embedded fonts."""
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            try:
+                doc.subset_fonts()
+            except Exception:  # noqa: BLE001 — a font we cannot subset must not fail the upload
+                pass
+            return doc.tobytes(garbage=4, deflate=True, clean=True)
+
+    def _downsample_pdf_images(self, data: bytes, plan: OptimizationPlan) -> bytes | None:
+        """Recompress the images embedded in the PDF, leaving pages and text untouched.
+
+        Walks a ladder from gentle to firm and stops at the first result that fits, so a scanned
+        document loses only as much image detail as the size limit actually demands.
+        """
+        smallest: bytes | None = None
+        for dpi, quality in self._pdf_image_ladder(plan):
+            candidate = self._recompress_pdf_images(data, dpi, quality)
+            if candidate is None:
+                continue
+            if smallest is None or len(candidate) < len(smallest):
+                smallest = candidate
+            if len(candidate) <= plan.max_bytes:
+                break
+        return smallest
+
+    def _recompress_pdf_images(self, data: bytes, target_dpi: int, quality: int) -> bytes | None:
+        """One pass: every embedded image re-encoded as JPEG, capped at `target_dpi` on the page.
+
+        Returns None when nothing could be improved. Images that carry a transparency mask or are
+        bitonal are left alone — re-encoding those does more harm than good.
+        """
+        replaced = False
+        seen: set[int] = set()
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            for page in doc:
+                for info in page.get_images(full=True):
+                    xref = int(info[0])
+                    if xref in seen:
+                        continue
+                    seen.add(xref)
+                    encoded = self._shrink_pdf_image(doc, page, xref, target_dpi, quality)
+                    if encoded is None:
+                        continue
+                    try:
+                        page.replace_image(xref, stream=encoded)
+                    except Exception:  # noqa: BLE001 — one awkward image must not fail the upload
+                        continue
+                    replaced = True
+            if not replaced:
+                return None
+            return doc.tobytes(garbage=4, deflate=True, clean=True)
+
+    @staticmethod
+    def _shrink_pdf_image(
+        doc: pymupdf.Document, page: pymupdf.Page, xref: int, target_dpi: int, quality: int
+    ) -> bytes | None:
+        """The replacement bytes for one embedded image, or None if it is best left as it is."""
+        try:
+            extracted = doc.extract_image(xref)
+        except Exception:  # noqa: BLE001
+            return None
+        raw = extracted.get("image") if extracted else None
+        if not raw or extracted.get("smask"):
+            return None
+        try:
+            img = Image.open(io.BytesIO(raw))
+            img.load()
+        except Exception:  # noqa: BLE001
+            return None
+        if img.mode == "1":  # a bitonal scan compresses better as-is than as JPEG
+            return None
+
+        # Pixels are only worth keeping up to the resolution the page actually draws them at.
+        rects = page.get_image_rects(xref)
+        if rects:
+            drawn_width_pt = max(r.width for r in rects)
+            max_px = max(1, round(drawn_width_pt / 72 * target_dpi))
+            if img.width > max_px:
+                height = max(1, round(img.height * max_px / img.width))
+                img = img.resize((max_px, height), Image.LANCZOS)
+
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        encoded = _encode_image(img, "jpeg", quality)
+        return encoded if len(encoded) < len(raw) else None
+
+    @staticmethod
+    def _pdf_image_ladder(plan: OptimizationPlan) -> tuple[tuple[int, int], ...]:
+        """(page dpi cap, jpeg quality) steps, never going below the plan's readability floor."""
+        floor = plan.quality_floor
+        return tuple(
+            (dpi, max(floor, quality))
+            for dpi, quality in ((200, 80), (150, 72), (120, 65), (100, 55))
         )
 
     @staticmethod

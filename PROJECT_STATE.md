@@ -75,6 +75,11 @@ Completed:
   the dimension floors / page limits / DPI advisory are removed from the flow slots
 - Strategy: an oversized PNG is re-encoded as JPEG when the portal accepts JPEG (lossless PNG can
   only be shrunk by discarding pixels, which hits the readability floor first)
+- PDF fix: real in-place image recompression (extract_image → resize to the placement DPI → JPEG →
+  replace_image, skipping masks and bitonal scans), tried before anything destructive; page
+  rasterisation is now adopted only when it actually brings the file under the limit
+- PDF fix verified: 6-page 746 KB scan → 491 KB (−34%) with the text layer intact; 5 MB photo PDFs
+  (4 and 12 pages) → ~358 KB (−93%), text kept; a text-only PDF is still passed through untouched
 
 Next:
 Phase 6: AI-assisted analysis behind a replaceable interface — document-type suggestion and
@@ -91,8 +96,11 @@ Known Issues:
   config-required slot has an accepted document
 - A compliant file is passed through untouched, so its EXIF (incl. GPS) is not stripped;
   revisit in Phase 8 (lossless metadata strip)
-- Converting a PDF to an image, or rasterising PDF pages to hit a size limit, removes the text
-  layer; the engine warns but this is irreversible
+- Converting a PDF to an image removes the text layer; rasterising PDF pages does too, so it is
+  now a last resort taken only when it is what finally meets the size limit. Either way the engine
+  warns and the loss is irreversible
+- pymupdf's doc.rewrite_images() proved unreliable (raised on equal dpi_threshold/dpi_target and
+  barely shrank files otherwise); per-image recompression is used instead. Do not reintroduce it
 - min_dpi is validated as a warning, not a rejection (self-reported metadata is unreliable)
 - Whole document is held in memory during processing; upload ceiling is MAX_UPLOAD_BYTES (25 MB),
   enforced after the body is buffered — streaming rejection is a Phase 8 item
@@ -136,3 +144,6 @@ Architecture Decisions:
 - Auth-protected file endpoint means previews are blob URLs, revoked on unmount — never plain src
 - A lossless source (PNG) that exceeds the size limit is re-encoded to JPEG when the portal accepts
   JPEG; a PNG that already complies is still passed through byte-identical
+- A PDF's own structure and images are optimised in place before any page is rasterised: the
+  selectable text layer is worth more than the last few kilobytes, and a rasterisation that still
+  misses the limit is pure loss, so the engine declines it and reports the failure instead

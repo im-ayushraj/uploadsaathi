@@ -13,7 +13,7 @@ from app.uploadsaathi.requirements.resolver import DocumentTypeNotFoundError, Po
 from app.uploadsaathi.service import UploadService
 from app.uploadsaathi.strategy import OptimizationMode, OptimizationStrategyProvider
 
-from .synthetic import corrupt, make_image, make_oversized_jpeg, make_pdf
+from .synthetic import corrupt, make_image, make_oversized_jpeg, make_pdf, make_vector_pdf
 from .test_strategy import requirement
 
 analyzer = DocumentAnalyzer()
@@ -108,12 +108,40 @@ def test_page_limit_violation_is_reported():
     assert "too_many_pages" in result.issues
 
 
-def test_lost_text_layer_is_reported_as_degraded():
+def test_pdf_images_are_recompressed_before_the_text_layer_is_sacrificed():
     data = make_pdf(pages=2, image_bytes=make_image(1800, 1400, fmt="JPEG", quality=95))
-    result, _ = validate(data, "doc.pdf", accepted_formats=("pdf",), max_bytes=200_000)
+    result, outcome = validate(data, "doc.pdf", accepted_formats=("pdf",), max_bytes=200_000)
     assert result.is_valid
+    assert outcome.byte_size <= 200_000
+    # The scan fits once the embedded images are recompressed, so the pages stay real pages.
+    assert "pdf_downsample_images" in outcome.steps_applied
+    assert "pdf_rasterise_pages" not in outcome.steps_applied
+    assert "searchable_text_layer_lost" not in result.warnings
+    assert analyzer.analyze(outcome.data, "doc.pdf").pdf_has_text_layer
+
+
+def test_pages_are_rasterised_only_when_that_is_what_makes_the_file_fit():
+    # A vector-heavy PDF has no embedded images to recompress: rasterising is the only lever left.
+    data = make_vector_pdf()
+    result, outcome = validate(data, "plan.pdf", accepted_formats=("pdf",), max_bytes=250_000)
+    assert result.is_valid
+    assert outcome.byte_size <= 250_000
+    assert "pdf_rasterise_pages" in outcome.steps_applied
     assert result.quality_status == "degraded"
     assert "searchable_text_layer_lost" in result.warnings
+    assert any(w.startswith("pages_rasterised_at_") for w in outcome.warnings)
+
+
+def test_unreachable_pdf_target_keeps_the_text_layer_instead_of_rasterising_for_nothing():
+    data = make_vector_pdf()
+    result, outcome = validate(data, "plan.pdf", accepted_formats=("pdf",), max_bytes=100_000)
+    assert outcome.target_met is False
+    assert "file_too_large" in result.issues
+    # Throwing the text away without reaching the limit would cost the citizen everything and buy
+    # them nothing, so the document is left readable and the failure is reported honestly.
+    assert "pdf_rasterise_pages" not in outcome.steps_applied
+    assert analyzer.analyze(outcome.data, "plan.pdf").pdf_has_text_layer
+    assert "size_target_not_reached_readability_floor_hit" in outcome.warnings
 
 
 def test_dpi_is_advisory_not_a_failure():

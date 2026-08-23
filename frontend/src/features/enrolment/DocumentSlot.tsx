@@ -24,7 +24,8 @@ const STEP_LABELS: Record<string, string> = {
   recompress: 'Compressed the image',
   target_size_search: 'Found the highest quality that still fits the size limit',
   pdf_optimise_structure: 'Cleaned up the PDF’s internal structure',
-  pdf_downsample_images: 'Reduced the resolution of images inside the PDF',
+  pdf_downsample_images: 'Recompressed the images inside the PDF (the text stays selectable)',
+  pdf_rasterise_pages: 'Turned the PDF pages into images — the only way to fit the size limit',
 }
 
 const WARNING_LABELS: Record<string, string> = {

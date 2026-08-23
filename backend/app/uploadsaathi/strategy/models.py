@@ -24,6 +24,7 @@ class Operation(StrEnum):
     TARGET_SIZE_SEARCH = "target_size_search"
     PDF_OPTIMISE_STRUCTURE = "pdf_optimise_structure"
     PDF_DOWNSAMPLE_IMAGES = "pdf_downsample_images"
+    PDF_RASTERISE_PAGES = "pdf_rasterise_pages"
 
 
 # Readability guards. Going past these destroys the document, so the engine never does.

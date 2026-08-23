@@ -74,6 +74,28 @@ def make_pdf(pages: int = 1, image_bytes: bytes | None = None, with_text: bool =
     return data
 
 
+def make_vector_pdf(pages: int = 1, strokes: int = 16_000, seed: int = 7) -> bytes:
+    """A heavy *vector* PDF: no embedded images, so recompression has nothing to work on.
+
+    This is the shape of document (a dense map, plan or signature-laden form) where rasterising the
+    pages is the only remaining way to reach a size limit.
+    """
+    rng = random.Random(seed)
+    doc = pymupdf.open()
+    for index in range(pages):
+        page = doc.new_page(width=595, height=842)
+        shape = page.new_shape()
+        for _ in range(strokes):
+            x, y = rng.uniform(20, 575), rng.uniform(20, 400)
+            shape.draw_line((x, y), (x + rng.uniform(-6, 6), y + rng.uniform(-6, 6)))
+        shape.finish(width=0.4, color=(0.1, 0.1, 0.1))
+        shape.commit()
+        page.insert_text((40, 430), f"Demo vector plan — page {index + 1}", fontsize=9)
+    data = doc.tobytes(garbage=4, deflate=True)
+    doc.close()
+    return data
+
+
 def make_oversized_jpeg(target_bytes: int = 7_400_000) -> bytes:
     """Grow dimensions until the encoded JPEG is at least `target_bytes` (a real 7.4 MB photo)."""
     width, height = 2400, 1800
