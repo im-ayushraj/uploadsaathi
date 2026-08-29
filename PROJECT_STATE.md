@@ -80,6 +80,10 @@ Completed:
   rasterisation is now adopted only when it actually brings the file under the limit
 - PDF fix verified: 6-page 746 KB scan → 491 KB (−34%) with the text layer intact; 5 MB photo PDFs
   (4 and 12 pages) → ~358 KB (−93%), text kept; a text-only PDF is still passed through untouched
+- Hosting prep: infra/render.yaml Blueprint (free web service + free Postgres, migrations in the
+  start command, generated JWT_SECRET, health check), frontend/vercel.json (SPA fallback),
+  DATABASE_URL normalisation for hosted `postgres://` URLs, .env.example filled in, and
+  docs/DEPLOYMENT.md — the step-by-step for submitting the prototype live
 
 Next:
 Phase 6: AI-assisted analysis behind a replaceable interface — document-type suggestion and
@@ -105,6 +109,12 @@ Known Issues:
 - Whole document is held in memory during processing; upload ceiling is MAX_UPLOAD_BYTES (25 MB),
   enforced after the body is buffered — streaming rejection is a Phase 8 item
 - Optimised documents are stored unencrypted on local disk and are never purged (Phase 8)
+- On a free host there is no persistent disk: STORAGE_DIR points at /tmp, so a prepared document
+  outlives the request but not a restart, while its DB row survives — the download then 404s
+- Render's free PostgreSQL expires 30 days after creation; swap DATABASE_URL to a Neon free
+  database if the submission may be reviewed later than that
+- A free Render instance sleeps after ~15 minutes idle; the first request then takes ~50 s, so the
+  health URL must be opened a couple of minutes before any live demo
 - DocumentOut.format is lowercase ("jpeg") while UploadOutcome.format is upper-case ("JPEG"); the
   UI normalises both, but the contract should be made consistent
 - Preview images are re-fetched as blobs on every mount (no caching); fine at prototype scale
@@ -147,3 +157,8 @@ Architecture Decisions:
 - A PDF's own structure and images are optimised in place before any page is rasterised: the
   selectable text layer is worth more than the last few kilobytes, and a rasterisation that still
   misses the limit is pure loss, so the engine declines it and reports the failure instead
+- Deployed as two origins (static frontend + API) talking over HTTPS with CORS_ORIGINS naming the
+  frontend, rather than proxying the API through the static host: an upload of tens of megabytes
+  should not pass through an edge proxy's body limits
+- Alembic runs from the start command on each boot (free hosts have no pre-deploy hook); upgrades
+  are idempotent, so a fresh database creates its own schema

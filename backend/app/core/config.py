@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +29,17 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "./var/documents"
     # Refuse an upload larger than this before any processing starts.
     MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _use_psycopg3(cls, value: str) -> str:
+        """Managed hosts (Render, Neon, Railway, Heroku) hand out `postgres://` URLs, which
+        SQLAlchemy resolves to psycopg2 — a driver this project does not install. Point them at
+        psycopg 3 so a copy-pasted connection string just works."""
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return f"postgresql+psycopg://{value[len(prefix) :]}"
+        return value
 
     @property
     def cors_origins(self) -> list[str]:

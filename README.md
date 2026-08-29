@@ -32,6 +32,11 @@ API docs: http://localhost:8000/docs
 cd infra && docker compose up --build
 ```
 
+## Deploy it live
+
+Backend + PostgreSQL on Render, frontend on Vercel, both on free plans:
+step-by-step in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ## Tests
 
 ```bash

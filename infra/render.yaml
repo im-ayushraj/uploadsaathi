@@ -1,0 +1,49 @@
+# Render Blueprint — UploadSaathi prototype API (+ its database).
+#
+# Prototype only: not an official UIDAI product, not connected to any government system.
+#
+# Deploy: Render Dashboard → New → Blueprint → pick this repo → set the Blueprint file to
+# infra/render.yaml. Everything below is created for you; only CORS_ORIGINS needs filling in
+# (with the frontend URL) once the frontend is deployed.
+services:
+  - type: web
+    name: uploadsaathi-api
+    runtime: python
+    plan: free
+    region: singapore # closest region to Indian users
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Migrations run on every boot: Alembic is idempotent, so this is safe and keeps the free
+    # plan (which has no pre-deploy hook) in a correct state after each deploy.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: APP_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true # Render generates a strong secret; never commit one
+      - key: DATABASE_URL
+        fromDatabase:
+          name: uploadsaathi-db
+          property: connectionString
+      # Comma-separated list of browser origins. Set this to the deployed frontend URL,
+      # e.g. https://uploadsaathi.vercel.app — no trailing slash.
+      - key: CORS_ORIGINS
+        sync: false
+      # The free plan has no persistent disk, so prepared documents live in /tmp for the life of
+      # the instance. Attach a Render disk (paid) and point this at it to keep them.
+      - key: STORAGE_DIR
+        value: /tmp/uploadsaathi-documents
+      # 12 MB, down from the local 25 MB: the free instance has 512 MB RAM and the whole document
+      # is held in memory while it is optimised.
+      - key: MAX_UPLOAD_BYTES
+        value: 12582912
+
+databases:
+  - name: uploadsaathi-db
+    plan: free
+    region: singapore
+    databaseName: uploadsaathi
+    user: uploadsaathi
